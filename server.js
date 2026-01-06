@@ -13,22 +13,29 @@ app.post("/generate-image", async (req, res) => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          model: "turbo"
-        })
+        body: JSON.stringify({ prompt, model: "turbo" })
       }
     );
 
-    const data = await response.json();
+    const rawText = await response.text();
+
+    // Find last JSON block in stream
+    const lines = rawText.split("\n").filter(l => l.includes("{"));
+    const lastLine = lines[lines.length - 1];
+
+    const jsonString = lastLine.replace(/^data:\s*/, "");
+    const data = JSON.parse(jsonString);
 
     res.json({
-      imageUrl: data.imageUrl || data.output || data
+      imageUrl: data.imageUrl
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Image generation failed" });
+    console.error("ERROR:", error);
+    res.status(500).json({
+      error: "Image generation failed",
+      details: error.message
+    });
   }
 });
 
