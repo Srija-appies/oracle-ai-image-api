@@ -8,6 +8,10 @@ app.post("/generate-image", async (req, res) => {
   try {
     const { prompt } = req.body;
 
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
     const response = await fetch(
       "https://t2i.mcpcore.xyz/api/free/generate",
       {
@@ -18,16 +22,27 @@ app.post("/generate-image", async (req, res) => {
     );
 
     const rawText = await response.text();
+    const lines = rawText.split("\n");
 
-    // Find last JSON block in stream
-    const lines = rawText.split("\n").filter(l => l.includes("{"));
-    const lastLine = lines[lines.length - 1];
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
 
-    const jsonString = lastLine.replace(/^data:\s*/, "");
-    const data = JSON.parse(jsonString);
+      const payload = line.replace("data:", "").trim();
+      if (!payload || payload === "[DONE]") continue;
 
-    res.json({
-      imageUrl: data.imageUrl
+      try {
+        const parsed = JSON.parse(payload);
+
+        if (parsed.imageUrl) {
+          return res.json({ imageUrl: parsed.imageUrl });
+        }
+      } catch {
+        // Ignore partial JSON chunks
+      }
+    }
+
+    res.status(500).json({
+      error: "No image URL found in response"
     });
 
   } catch (error) {
